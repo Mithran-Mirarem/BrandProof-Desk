@@ -1,0 +1,79 @@
+.env
+*.db
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+.venv/
+.DS_Store
+.pytest_cache/
+
+# Python virtual environments
+.venv/
+**/.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Credentials and certificates
+*.pem
+*.key
+secrets/
+credentials/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Frontend dependencies
+node_modules/
+frontend/dist/
+dist/
+build/
+
+# User-uploaded and generated data
+uploads/
+backend/uploads/
+storage/
+generated_reports/
+
+# Logs
+*.log
+
+# Backups
+backup*/
+**/backup*/
+
+# Development patches
+BrandProof_*_Patch/
+BrandProof_*_Fix_Patch/
+BrandProof_*_Patch.zip
+BrandProof_Desk_*_Patch.zip
+
+# Cloudflare local configuration
+.cloudflared/
+# BrandProof local patch archives
+BrandProof_Desk_Round2_QA_Fixes.zip
+BrandProof_Desk_Free_Local_AI_Patch.zip
+BrandProof_Qwen_Thinking_Fix_Patch.zip
+BrandProof_Desk_QA_Test_Pack.zip
+
+# SQLite temporary files
+*.sqlite-wal
+*.sqlite-shm
+
+# Local backup files
+*.backup
