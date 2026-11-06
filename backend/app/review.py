@@ -210,11 +210,40 @@ def run_review(content: str, channel: str, brief: str, brand: dict):
 
     unique = _consolidate_findings(findings)
     revised = (ai_result or {}).get("revised_text") or content
-    summary = (ai_result or {}).get("summary") or f"Completed {len(checks)} selected review checks. {len(unique)} finding(s) require creator or reviewer attention."
     mode = "local_ollama" if ai_used else "rules_fallback"
-    if not ai_used and ai_result and ai_result.get("_error"):
-        summary = f"Local AI was unavailable for this review ({ai_result['_error']}). Deterministic checks completed; human review is required."
+    finding_count = len(unique)
 
+    # Generate the summary from final consolidated findings,
+    # never from an independently generated LLM summary.
+    if not ai_used:
+        if ai_result and ai_result.get("_error"):
+            summary = (
+                f"Local AI was unavailable ({ai_result['_error']}). "
+                f"Deterministic checks completed and identified {finding_count} finding(s). "
+                "Human review is required."
+            )
+        else:
+            summary = (
+                f"Deterministic brand checks identified {finding_count} finding(s). "
+                "AI-assisted analysis was not active; human review is required."
+            )
+    elif finding_count == 0:
+        summary = (
+            "No configured checks detected an issue (0 findings). "
+            "This is not a guarantee of complete brand compliance."
+        )
+    else:
+        categories = sorted({
+            str(item.get("category") or "brand issue").replace("_", " ").strip()
+            for item in unique
+        })
+        category_text = ", ".join(categories[:4])
+
+        summary = (
+            f"The review identified {finding_count} finding(s), including {category_text}. "
+            "Review the supporting evidence and suggested corrections before making "
+            "a publication decision."
+        )
     now = datetime.now(timezone.utc).isoformat()
     return {
         "id": str(uuid.uuid4()),
