@@ -1,33 +1,56 @@
-# BrandProof Desk
+# BrandProof Desk — Round 3
 
-**CodeNexus India 2026 — Round 2 functional MVP**
-Evidence-linked, human-controlled brand governance review for text, PDF and DOCX content.
+**Evidence-linked, human-controlled brand governance**
 
-## What works in this build
+BrandProof Desk reviews marketing/product content against approved brand rules and source records. Round 3 adds three connected capabilities: visual creative screening, evidence provenance and expiry management, and governance analytics.
 
-- Brand evidence vault: edit brand name, tone guidance, required/restricted terminology and approved fact records.
-- Content intake: paste content or upload PDF, DOCX or TXT (8 MB max).
-- Context-dependent review plan: selects exact-term, claim and tone checks based on the draft.
-- Deterministic checks: restricted phrases, brand naming and high-risk/quantified claims.
-- Evidence retrieval: keyword-based retrieval over approved fact records; results retain source IDs, names and validity dates.
-- Optional live LLM analysis through Adaption Responses API (Qwen 3.5 397B by default), with structured findings and suggested revisions.
-- Transparent fallback: without an API key, exact-rule and claim checks remain usable and the UI clearly labels the run as rule-engine fallback. It does not pretend that a live LLM ran.
-- Review outcomes: approve, request changes or escalate; apply a suggested revision; maintain an audit history.
-- Export a review report as Markdown.
+## Round 3 capabilities
 
-## Stack
+### 1. Visual brand compliance
 
-- Frontend: React 19 + Vite + custom CSS
-- API: Python 3.11 + FastAPI
-- Storage: SQLite by default for a self-contained demo (the Round 1 proposal planned MongoDB Atlas; this is a disclosed Round 2 implementation simplification for reliable local judging. A MongoDB adapter can replace this storage layer in a later iteration.)
-- AI: Adaption Responses API; `qwen3.5-397b` is the default model candidate and can be changed via environment variable.
-- Document extraction: PyMuPDF and python-docx
+- Upload PNG, JPEG or WebP creative assets (8 MB maximum; 24 megapixels maximum).
+- Configure up to 12 approved brand HEX colours; detected dominant colours are compared to the palette using an RGB-distance tolerance.
+- Upload one approved logo reference; the visual service searches for a possible match using a perceptual-hash similarity score.
+- If the Tesseract OCR engine is installed on the backend machine, extract image text and flag configured restricted terms.
+- Save each visual screening with a SHA-256 checksum, findings and dominant-colour record.
+
+**Interpretation boundary:** Logo similarity is a screening candidate, not proof of authenticity. RGB distance is not a certified colour-management workflow. OCR can misread small or stylised text. Results are advisory and require human verification.
+
+### 2. Evidence provenance and expiry
+
+- Maintain independent evidence records with claim, source name, source URL, owner, version, valid-from date, valid-until date and lifecycle state.
+- Preserve an evidence audit trail for record creation, changed fields/version, and deletion; the registry UI can inspect each record history.
+- Effective states include approved, expired, scheduled, pending verification and archived.
+- Review retrieval only supplies currently approved records inside their validity window to the AI analysis.
+- Relevant expired, future-dated or soon-to-expire records are surfaced as evidence-lifecycle findings instead of being silently treated as approved evidence.
+- Existing Round 2 JSON facts are migrated into the evidence registry at database initialisation, preserving their IDs and source labels.
+
+### 3. Governance analytics
+
+- Aggregate text-review and visual-screening findings by category and severity.
+- Show review channel, human decision status, approval rate, repeated issues and 14-day review/visual activity.
+- Analytics are based on records stored in the current SQLite workspace.
+
+## Existing Round 2 workflow retained
+
+- React/Vite workspace, review form, TXT/PDF/DOCX extraction, brand rules and evidence vault.
+- Python FastAPI service with deterministic phrase/claim checks and local Ollama/Qwen 3.5 4B analysis.
+- Human approval, request-changes and escalation decisions, review history and audit events.
+- PDF review reports, now including evidence owner, version, source URL and validity metadata.
+
+## Technology stack
+
+- Frontend: React 19, Vite 6.3.5, custom CSS, lucide-react.
+- Backend: Python 3.11+, FastAPI, Uvicorn, Pydantic.
+- AI: Ollama with `qwen3.5:4b` for contextual text analysis; visual checks are deterministic Python/Pillow algorithms.
+- Storage: SQLite, with lightweight schema migrations.
+- Documents: PyMuPDF, python-docx, ReportLab.
+- Visual: Pillow, optional `pytesseract` Python wrapper and locally installed Tesseract OCR executable.
+- Tests: pytest, FastAPI TestClient/HTTPX.
 
 ## Run locally on Windows
 
-Prerequisites: Python 3.11+ and Node.js 20+.
-
-### 1. Backend
+### Backend
 
 ```powershell
 cd backend
@@ -35,90 +58,71 @@ py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
-# Open .env and add ADAPTION_API_KEY if you have it
 python run.py
 ```
 
-API health: http://localhost:8000/api/health
-Interactive API docs: http://localhost:8000/docs
+The API is available at `http://localhost:8000`; OpenAPI docs are at `/docs`.
 
-### 2. Frontend (new terminal)
+Set `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX` and `BRANDPROOF_DB_PATH` in `backend/.env` as needed. Keep Ollama running separately. The default model is `qwen3.5:4b`.
+
+### Frontend
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-Open the Vite URL printed in the terminal (normally http://localhost:5173).
+For a separate API host, set `VITE_API_URL` in `frontend/.env` before building.
 
-If the API is hosted at a different URL, create `frontend/.env` with:
+### Optional OCR setup on Windows
 
-```env
-VITE_API_URL=https://your-api-host
-```
+The Python dependency `pytesseract` is only a wrapper. Install the Tesseract OCR executable separately and ensure `tesseract.exe` is on `PATH`. Without it, visual palette and logo screening still work, but text-in-image checks explicitly report OCR as unavailable.
 
-Then rebuild with `npm run build`.
+## API additions
 
-## Enable live Adaption AI
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/evidence` | List provenance-aware evidence records |
+| `POST /api/evidence` | Create an evidence record |
+| `PUT /api/evidence/{id}` | Update its source, owner, version, validity and state |
+| `DELETE /api/evidence/{id}` | Delete a record while retaining its audit events |
+| `GET /api/evidence/{id}/history` | Read evidence lifecycle/audit events |
+| `GET /api/visual/config` | Read palette and logo-reference configuration |
+| `PUT /api/visual/config` | Save approved HEX palette |
+| `POST /api/visual/logo-reference` | Upload approved reference logo |
+| `DELETE /api/visual/logo-reference` | Remove logo reference |
+| `POST /api/visual/reviews` | Analyse a creative image |
+| `GET /api/visual/reviews` | List saved visual screening history |
+| `GET /api/analytics` | Return governance aggregates and timeline |
 
-1. Create/use your Adaption account and generate an API key.
-2. Put the key only in `backend/.env`:
+## Judge walkthrough
 
-```env
-ADAPTION_API_KEY=
-ADAPTION_BASE_URL=https://api.prod.adaptionlabs.ai/api/v1
-ADAPTION_MODEL=qwen3.5-397b
-```
+1. Open **Visual compliance**. Set the approved palette and upload the official logo reference.
+2. Upload a creative asset and inspect the dominant colours, logo candidate score, OCR availability and findings.
+3. Open **Evidence registry**. Inspect provenance fields, edit an evidence version and try a deliberately expired test record. Confirm that expired records are not sent as approved evidence in a text review.
+4. Open **New review** and load the sample draft. Review the evidence-expiry warning and existing restricted-phrase/claim checks.
+5. Record a human decision, export a PDF and confirm that evidence owner/version/validity data appear in the report.
+6. Open **Governance analytics** and inspect category/severity aggregates, decisions, recurring issues and the activity timeline.
 
-3. Restart the backend and check `/api/status`. It should return `ai_configured: true`.
+## Important limitations and safe use
 
-The backend sends draft content and relevant approved fact excerpts to the external model for semantic analysis. Do not upload sensitive or confidential brand material unless you have permission and have reviewed the provider's data handling terms. The key is never sent to the browser.
-
-Adaption API docs: https://docs.adaptionlabs.ai/api/resources/responses/methods/create
-
-## Judge demo — 3 minutes
-
-1. Open **Brand evidence vault** and show the preloaded Northstar Analytics demo brand.
-2. Open **New review** and click **Load sample draft**.
-3. Run the review. Demonstrate the restricted-phrase and unsupported-claim findings, with the approved facts shown beside them.
-4. Open a finding and explain that missing evidence is marked “needs review”, not “false”.
-5. Apply the suggested revision, then choose **Request changes** or **Approve** to show human control.
-6. Open **Review history** and the review's audit history.
-7. Show `/api/status` to prove whether live Adaption AI is configured; do not claim live AI if it is in fallback mode.
-
-## Important limitations (be transparent)
-
-- Brand evidence retrieval is keyword-based in this MVP, not vector/embedding retrieval.
-- The LLM call is semantic assistance, not legal advice or an independent truth oracle.
-- The deterministic claim detector flags numeric/absolute language for evidence review; it cannot prove truth or falsity.
-- Visual logo/colour analysis and accessibility checks are Round 3 improvements, not implemented in this Round 2 MVP.
-- This MVP has a demo workspace and no production-grade multi-tenant authentication. Do not use it with real confidential client documents.
-- Human approval is a recorded workflow decision; the app does not publish to external channels.
+- This is a single-workspace demonstration, not a production multi-tenant service. Authentication, role-based access and tenant isolation are not implemented.
+- The public demo API is unauthenticated and must use synthetic/non-confidential data only. Do not expose secrets or real customer documents.
+- Evidence retrieval remains keyword-based; vector/embedding retrieval is not implemented.
+- Local backend, SQLite and Ollama require the participant's machine and network to remain available when using a temporary Cloudflare Quick Tunnel.
+- No visual algorithm guarantees exact logo authenticity or colour correctness. All findings are advisory and require a human decision.
+- The approval workflow records decisions; it does not publish content to an external channel.
 
 ## Repository structure
 
 ```text
-brandproof-desk/
-  backend/
-    app/{main.py,db.py,ai.py,review.py}
-    requirements.txt
-    .env.example
-    Dockerfile
-    run.py
-  frontend/
-    src/{main.jsx,style.css}
-    index.html
-    package.json
-  docs/
-  tests/
+backend/app/{main.py,db.py,ai.py,review.py,report.py,visual.py}
+frontend/src/{main.jsx,Round3.jsx,style.css,round3.css}
+tests/{test_review.py,test_round3.py}
+docs/ROUND3_SCOPE.md
 ```
 
-## Round 2 / Round 3 boundary
+## Development disclosure
 
-Round 2: one complete text/PDF/DOCX review workflow with evidence retrieval, deterministic and optional LLM checks, suggestions and approval history.
-Round 3 planned improvements: (1) supported visual brand checks for logo/colour usage; (2) claim provenance and expiry management; (3) governance insights showing recurring issues and unclear guidelines.
-
-## Disclosure
-
-This is a solo implementation by VP Mithramoorthy. The system uses third-party libraries and, when configured, the Adaption AI Responses API with the selected model. The AI-generated evaluation is labelled as such; rules and approval actions are deterministic application code. No existing completed application is being represented as new hackathon work. Update this disclosure and your repository history to reflect the actual work and any assistance/tools used.
+This is a solo participant project by VP Mithramoorthy. ChatGPT/AI assistance was used for coding support, code review, debugging and test drafting. The participant remains responsible for configuration, integration, validation and final decisions. Visual screening is implemented with deterministic image-processing heuristics; it is not represented as an independent vision model or a definitive legal/brand certification.

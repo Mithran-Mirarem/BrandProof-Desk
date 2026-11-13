@@ -158,12 +158,12 @@ def build_review_pdf(review: dict, audit: list[dict] | None = None) -> bytes:
         ]
         story.extend(parts)
 
-    story.append(_paragraph("Approved evidence retrieved", styles["BPHeading"]))
+    story.append(_paragraph("Evidence references and lifecycle status", styles["BPHeading"]))
     evidence = review.get("evidence") or []
     if evidence:
         for item in evidence:
             story.append(_paragraph(
-                f"{item.get('id', 'SOURCE')} — {item.get('claim', '')}\nSource: {item.get('source', 'Not specified')} | Valid until: {item.get('valid_until', 'Not specified')}",
+                f"{item.get('id', 'SOURCE')} — {item.get('claim', '')}\nSource: {item.get('source', 'Not specified')} | Owner: {item.get('owner', 'Not specified')} | Version: {item.get('version', 'Not specified')}\nSource URL: {item.get('source_url', 'Not supplied')} | Valid from: {item.get('valid_from', 'Not specified')} | Valid until: {item.get('valid_until', 'Not specified')} | State: {item.get('status', 'unknown')}",
                 styles["BPSmall"],
             ))
     else:

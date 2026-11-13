@@ -75,3 +75,14 @@ def test_negative_summary_count_matches_final_findings(monkeypatch):
     assert f"identified {count} finding(s)" in result["summary"]
     assert "No issues detected" not in result["summary"]
 
+
+
+def test_expired_evidence_is_not_eligible_for_retrieval():
+    from app.review import _relevant_evidence
+    facts = [
+        {"id": "OLD-001", "claim": "Northstar Analytics includes dashboards", "source": "Old source", "status": "expired", "valid_until": "2025-01-01"},
+        {"id": "FACT-NEW", "claim": "Northstar Analytics includes dashboards and reporting", "source": "Current source", "status": "approved", "valid_until": "2099-12-31"},
+    ]
+    selected = _relevant_evidence("Northstar Analytics includes dashboards and reporting for teams", facts, "clear")
+    assert "OLD-001" not in {x["id"] for x in selected}
+    assert "FACT-NEW" in {x["id"] for x in selected}

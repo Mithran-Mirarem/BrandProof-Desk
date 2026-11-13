@@ -111,6 +111,21 @@ def _relevant_evidence(text, facts, tone):
     return [fact for _, fact in ranked[:8]] or [f for f in facts if f.get("status", "approved") == "approved"][:5]
 
 
+def _relevant_lapsed_evidence(text, facts):
+    """Find records whose wording overlaps the draft but are expired or not yet valid."""
+    words = set(re.findall(r"[a-zA-Z0-9]{4,}", text.lower()))
+    ranked = []
+    for fact in facts:
+        if fact.get("status") not in {"expired", "scheduled"} and not fact.get("expires_soon"):
+            continue
+        tokens = set(re.findall(r"[a-zA-Z0-9]{4,}", str(fact.get("claim", "")).lower()))
+        score = len(words & tokens)
+        if score >= 2:
+            ranked.append((score, fact))
+    ranked.sort(key=lambda x: x[0], reverse=True)
+    return [fact for _, fact in ranked[:5]]
+
+
 def _consolidate_findings(findings: list[dict]) -> list[dict]:
     """Merge overlapping findings from rules and the LLM without hiding distinct issue types."""
     consolidated: list[dict] = []
@@ -153,6 +168,17 @@ def run_review(content: str, channel: str, brief: str, brand: dict):
     checks.append("evidence_retrieval")
     evidence = _relevant_evidence(content, brand["approved_facts"], brand["tone"])
     evidence_ids = [item["id"] for item in evidence if item.get("id")]
+    lapsed_evidence = _relevant_lapsed_evidence(content, brand["approved_facts"])
+    for item in lapsed_evidence:
+        state = item.get("status", "expired")
+        timing = "expires within 30 days" if item.get("expires_soon") and state == "approved" else ("expired" if state == "expired" else "not yet valid")
+        findings.append(_finding(
+            "evidence_expiry", "warning", item.get("claim", "")[:220],
+            f"A related evidence record ({item.get('id', 'unknown')}) {timing}. Verify the source owner and renewal timeline before relying on this claim.",
+            [item.get("id")] if item.get("id") else [],
+            "Verify the source and renew or replace the record before its validity window closes.",
+            "high", "evidence_lifecycle",
+        ))
 
     for term in brand["forbidden_terms"]:
         if term.strip() and term.lower() in lower:
@@ -245,6 +271,10 @@ def run_review(content: str, channel: str, brief: str, brand: dict):
             "a publication decision."
         )
     now = datetime.now(timezone.utc).isoformat()
+    evidence_for_report = {item.get("id"): item for item in evidence if item.get("id")}
+    for item in lapsed_evidence:
+        if item.get("id"):
+            evidence_for_report[item["id"]] = item
     return {
         "id": str(uuid.uuid4()),
         "title": content.strip().splitlines()[0][:70] if content.strip() else "Untitled review",
@@ -256,7 +286,9 @@ def run_review(content: str, channel: str, brief: str, brand: dict):
         "findings": unique,
         "agent_mode": mode,
         "agent_plan": checks,
-        "evidence": evidence,
+        # Active evidence is supplied to the model; expired/scheduled evidence is only
+        # attached after analysis so it can be displayed as a lifecycle warning.
+        "evidence": list(evidence_for_report.values()),
         "summary": summary,
         "created_at": now,
         "updated_at": now,
